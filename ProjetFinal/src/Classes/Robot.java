@@ -44,6 +44,9 @@ public abstract class Robot {
     public int getEnergie() {
         return energie;
     }
+        public boolean getEnMarche() {
+        return enMarche;
+    }
 
     public int getX() { return x; }
     public int getY() { return y; }
@@ -185,20 +188,46 @@ public abstract class Robot {
         return neighbors;
     }
 
-    public static void deplacerRobotAStar(JPanel[] cells, int start, int goal, IntConsumer placer) {
+    public static void deplacerRobotAStar(JPanel[] cells, int start, int goal, IntConsumer placer, Runnable onComplete) {
         List<Integer> path = astar(start, goal);
+        if (path.isEmpty()) {
+            // No path found
+            return;
+        }
+        
         Timer timer = new Timer(250, null);
         final int[] step = {0};
+        
         timer.addActionListener(e -> {
             if (step[0] >= path.size()) {
                 ((Timer) e.getSource()).stop();
+                if (onComplete != null) {
+                    onComplete.run();  // Execute callback when movement is complete
+                }
                 return;
             }
+            
             int index = path.get(step[0]);
+            Color originalColor = cells[index].getBackground();
             cells[index].setBackground(new Color(100, 255, 100));
+            
+            // Move the robot to the new position
             placer.accept(index);
             step[0]++;
+            
+            // Restore cells to original color gradually
+            Timer colorTimer = new Timer(500, colorEvent -> {
+                cells[index].setBackground(originalColor);
+            });
+            colorTimer.setRepeats(false);
+            colorTimer.start();
         });
+        
         timer.start();
+    }
+
+    // Keep the old method for backward compatibility
+    public static void deplacerRobotAStar(JPanel[] cells, int start, int goal, IntConsumer placer) {
+        deplacerRobotAStar(cells, start, goal, placer, null);
     }
 }

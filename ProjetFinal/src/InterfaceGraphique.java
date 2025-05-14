@@ -3,6 +3,8 @@
 import Classes.RobotLivraison;
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseListener;
 import Classes.Robot;
 
@@ -35,11 +37,11 @@ public class InterfaceGraphique extends JFrame {
     private JButton dechet = createStyledButton("dechet");
     private JProgressBar energieBar = new JProgressBar(0, 100);
 
-    ImageIcon originalIcon = new ImageIcon("src/images/robot.png");
+    ImageIcon originalIcon = new ImageIcon("ProjetFinal/src/images/robot.png");
     Image scaledImage = originalIcon.getImage().getScaledInstance(120, 120, Image.SCALE_SMOOTH);
     ImageIcon robotIcon = new ImageIcon(scaledImage);
 
-    ImageIcon dead = new ImageIcon("src/images/dead.jpeg");
+    ImageIcon dead = new ImageIcon("ProjetFinal/src/images/dead.jpeg");
     Image scaledDead = dead.getImage().getScaledInstance(120, 120, Image.SCALE_SMOOTH);
     ImageIcon robotIcon2 = new ImageIcon(scaledDead);
 
@@ -131,6 +133,53 @@ public class InterfaceGraphique extends JFrame {
         cells[curr_index].revalidate();
         cells[curr_index].repaint();
         robot.ajouterHistorique("Déplacé vers index " + curr_index);
+    }
+
+    private void setupKeyboardControls() {
+        // Make the frame focusable to receive key events
+        this.setFocusable(true);
+        this.requestFocusInWindow();
+        
+        // Add key listener for arrow key movement
+        this.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                int robotX = robot.getX();
+                int robotY = robot.getY();
+                int newX = robotX;
+                int newY = robotY;
+                
+                // Determine target position based on arrow key
+                switch(e.getKeyCode()) {
+                    case KeyEvent.VK_UP:
+                        if(robotY > 0) newY--;
+                        break;
+                    case KeyEvent.VK_DOWN:
+                        if(robotY < 3) newY++;
+                        break;
+                    case KeyEvent.VK_LEFT:
+                        if(robotX > 0) newX--;
+                        break;
+                    case KeyEvent.VK_RIGHT:
+                        if(robotX < 3) newX++;
+                        break;
+                }
+                
+                // If position changed, move the robot
+                if(newX != robotX || newY != robotY) {
+                    try {
+                        robot.setX(newX);
+                        robot.setY(newY);
+                        placerRobotALaPosition(newX + newY * 4);
+                        robot.consommerEnergie(1);
+                        mettreAJourEnergie();
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(InterfaceGraphique.this, 
+                            ex.getMessage(), "Erreur", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            }
+        });
     }
 
     public InterfaceGraphique() {
@@ -230,29 +279,47 @@ public class InterfaceGraphique extends JFrame {
             mettreAJourEnergie();
         });
 
-
         livraison.addActionListener(e -> {
-            if (robot.getEnergie() > 0) {
-                modeLivraisonActif = true;
-                for (int i = 0; i < 16; i++) {
-                    int index = i;
-                    for (MouseListener ml : cells[i].getMouseListeners()) {
-                        cells[i].removeMouseListener(ml);
-                    }
-                    cells[i].addMouseListener(new java.awt.event.MouseAdapter() {
-                        @Override
-                        public void mouseClicked(java.awt.event.MouseEvent e) {
-                            if (modeLivraisonActif) {
+            if (robot.getEnergie() <= 0) {
+                JOptionPane.showMessageDialog(this, "Le robot n'a pas assez d'énergie pour livrer", 
+                                             "Énergie insuffisante", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            
+            modeLivraisonActif = true;
+            JOptionPane.showMessageDialog(this, "Mode livraison activé. Cliquez sur une case pour livrer.", 
+                                         "Mode Livraison", JOptionPane.INFORMATION_MESSAGE);
+            
+            for (int i = 0; i < 16; i++) {
+                int index = i;
+                // Remove previous listeners to avoid duplicates
+                for (java.awt.event.MouseListener ml : cells[i].getMouseListeners()) {
+                    cells[i].removeMouseListener(ml);
+                }
+                
+                cells[i].addMouseListener(new java.awt.event.MouseAdapter() {
+                    @Override
+                    public void mouseClicked(java.awt.event.MouseEvent e) {
+                        if (modeLivraisonActif) {
+                            if (robot.getEnergie() >= 5) {
                                 Robot.deplacerRobotAStar(cells, curr_index, index, InterfaceGraphique.this::placerRobotALaPosition);
                                 modeLivraisonActif = false;
                                 robot.ajouterHistorique("Livraison effectuée à l'index " + index);
-                                robot.consommerEnergie(15);
+                                robot.consommerEnergie(5);
                                 mettreAJourEnergie();
+                            } else {
+                                JOptionPane.showMessageDialog(InterfaceGraphique.this, 
+                                    "Énergie insuffisante pour la livraison (15% requis)", 
+                                    "Énergie insuffisante", JOptionPane.WARNING_MESSAGE);
+                                modeLivraisonActif = false;
                             }
                         }
-                    });
-                }
+                    }
+                });
             }
+            
+            // Request focus for keyboard control
+            InterfaceGraphique.this.requestFocusInWindow();
         });
 
         historique.addActionListener(e -> {
@@ -264,7 +331,7 @@ public class InterfaceGraphique extends JFrame {
             JOptionPane.showMessageDialog(this, sb.toString(), "Historique du robot", JOptionPane.INFORMATION_MESSAGE);
         });
 
-        ImageIcon dechetIcon = new ImageIcon(new ImageIcon("src/images/dechet.jpg").getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH));
+        ImageIcon dechetIcon = new ImageIcon(new ImageIcon("ProjetFinal/src/images/dechet.jpg").getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH));
         final int[] dechetIndex = {-1};
         dechet.addActionListener(e -> {
             if (dechetIndex[0] != -1) {
@@ -279,25 +346,76 @@ public class InterfaceGraphique extends JFrame {
             robot.ajouterHistorique("Déchet apparu à l'index " + dechetIndex[0]);
         });
 
-        ramasser.addActionListener(e -> {
+      ramasser.addActionListener(e -> {
             if (dechetIndex[0] != -1) {
-                Robot.deplacerRobotAStar(cells, curr_index, dechetIndex[0], InterfaceGraphique.this::placerRobotALaPosition);
-
-                Timer timer = new Timer(250 * 6, evt -> { // délai approximatif pour laisser le temps de déplacement
-                    if (curr_index == dechetIndex[0]) {
-                        cells[dechetIndex[0]].removeAll();
-                        cells[dechetIndex[0]].revalidate();
-                        cells[dechetIndex[0]].repaint();
-                        robot.ajouterHistorique("Déchet récupéré à l'index " + dechetIndex[0]);
+                // Store the target dechet position
+                final int targetDechetIndex = dechetIndex[0];
+                
+                // Create the onComplete callback to remove the dechet when robot reaches it
+                Runnable onComplete = () -> {
+                    // After movement completes, handle dechet removal
+                    if (curr_index == targetDechetIndex) {
+                        // Mark dechet as removed first
                         dechetIndex[0] = -1;
-                    } else {
-                        JOptionPane.showMessageDialog(this, "Le robot doit être sur le déchet pour le ramasser", "Attention", JOptionPane.WARNING_MESSAGE);
+                        
+                        // Remove everything from the cell
+                        cells[targetDechetIndex].removeAll();
+                        
+                        // Add back just robot
+                        robotLabel = new JLabel(robotIcon);
+                        cells[targetDechetIndex].add(robotLabel);
+                        cells[targetDechetIndex].revalidate();
+                        cells[targetDechetIndex].repaint();
+                        
+                        // Update history and energy
+                        robot.ajouterHistorique("Déchet récupéré à l'index " + targetDechetIndex);
+                        robot.consommerEnergie(2);
+                        mettreAJourEnergie();
                     }
-                });
-                timer.setRepeats(false);
-                timer.start();
+                };
+                
+                // Use the new method with callback
+                Robot.deplacerRobotAStar(cells, curr_index, targetDechetIndex, 
+                    InterfaceGraphique.this::placerRobotALaPosition, onComplete);
+                
             } else {
                 JOptionPane.showMessageDialog(this, "Aucun déchet à récupérer", "Info", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+
+        upButton.addActionListener(e -> {
+            if (robot.getY() > 0) {
+                robot.setY(robot.getY() - 1);
+                placerRobotALaPosition(robot.getX() + robot.getY() * 4);
+                robot.consommerEnergie(1);
+                mettreAJourEnergie();
+            }
+        });
+
+        downButton.addActionListener(e -> {
+            if (robot.getY() < 3) {
+                robot.setY(robot.getY() + 1);
+                placerRobotALaPosition(robot.getX() + robot.getY() * 4);
+                robot.consommerEnergie(1);
+                mettreAJourEnergie();
+            }
+        });
+
+        leftButton.addActionListener(e -> {
+            if (robot.getX() > 0) {
+                robot.setX(robot.getX() - 1);
+                placerRobotALaPosition(robot.getX() + robot.getY() * 4);
+                robot.consommerEnergie(1);
+                mettreAJourEnergie();
+            }
+        });
+
+        rightButton.addActionListener(e -> {
+            if (robot.getX() < 3) {
+                robot.setX(robot.getX() + 1);
+                placerRobotALaPosition(robot.getX() + robot.getY() * 4);
+                robot.consommerEnergie(1);
+                mettreAJourEnergie();
             }
         });
 
@@ -310,6 +428,7 @@ public class InterfaceGraphique extends JFrame {
         add(mainPanel);
         setVisible(true);
         mettreAJourEnergie();
+        setupKeyboardControls();
     }
 
     public static void main(String[] args) {
